@@ -1,5 +1,6 @@
 import os
 import time
+import json
 import random
 import datetime
 from selenium import webdriver
@@ -7,10 +8,12 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
 
+# ————— Setup logging ——————
 def log(msg):
     ts = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     print(f"[{ts}] {msg}", flush=True)
 
+# ————— Helper functions ——————
 def random_user_agent():
     uas = [
         # Desktop
@@ -22,6 +25,16 @@ def random_user_agent():
     ]
     return random.choice(uas)
 
+def get_current_ip(driver):
+    driver.get("https://httpbin.org/ip")
+    time.sleep(random.uniform(2, 4))
+    body = driver.find_element(By.TAG_NAME, "body").text
+    try:
+        data = json.loads(body)
+        return data.get("origin", body)
+    except:
+        return body
+
 def random_scroll(driver, height):
     for _ in range(random.randint(2, 5)):
         px = random.randint(int(height/3), height)
@@ -29,16 +42,14 @@ def random_scroll(driver, height):
         time.sleep(random.uniform(2, 6))
 
 def random_pause_resume(driver):
-    # Cari elemen <video> dulu
     videos = driver.find_elements(By.TAG_NAME, "video")
     if videos and random.random() < 0.5:
         try:
-            # Pause & play via JS arguments[0]
             driver.execute_script("arguments[0].pause();", videos[0])
             time.sleep(random.uniform(1, 3))
             driver.execute_script("arguments[0].play();", videos[0])
         except Exception as e:
-            log(f"Pause/Resume error: {e}")
+            log(f"pause/play error: {e}")
 
 def random_click_related(driver):
     if random.random() < 0.3:
@@ -52,62 +63,74 @@ def random_click_related(driver):
             return True
     return False
 
-# —————————————— Setup & Main ——————————————
+# ————— Main ——————
+proxy      = os.getenv("PROXY_URL")
+video      = os.getenv("VIDEO_ID")
+iterations = int(os.getenv("ITERATIONS", "1"))
 
-proxy = os.getenv("PROXY_URL")
-video = os.getenv("VIDEO_ID")
+for i in range(1, iterations+1):
+    # random resolution
+    vq = random.choice(["medium","large"])
+    width, height = (640,360) if vq=="medium" else (854,480)
 
-# random resolution: medium=360p, large=480p
-vq = random.choice(["medium","large"])
-width, height = (640,360) if vq=="medium" else (854,480)
+    # Chrome options
+    options = Options()
+    options.binary_location = os.environ.get("CHROME_BIN")
+    options.add_argument("--headless")
+    options.add_argument("--no-sandbox")
+    options.add_argument(f"--window-size={width},{height}")
+    options.add_argument(f"--proxy-server={proxy}")
+    options.add_argument(f"user-agent={random_user_agent()}")
+    options.add_argument("--disable-gpu")
+    options.add_argument("--ignore-certificate-errors")
 
-options = Options()
-options.binary_location = os.environ.get("CHROME_BIN")
-options.add_argument("--headless")
-options.add_argument("--no-sandbox")
-options.add_argument(f"--window-size={width},{height}")
-options.add_argument(f"--proxy-server={proxy}")
-options.add_argument(f"user-agent={random_user_agent()}")
-options.add_argument("--disable-gpu")
-options.add_argument("--ignore-certificate-errors")
+    # start browser
+    service = Service(executable_path=os.environ.get("CHROMEDRIVER_PATH"))
+    driver  = webdriver.Chrome(service=service, options=options)
 
-service = Service(executable_path=os.environ.get("CHROMEDRIVER_PATH"))
-driver = webdriver.Chrome(service=service, options=options)
+    log(f"[{i}/{iterations}] new session — rotating IP")
+    ip = get_current_ip(driver)
+    log(f"[{i}/{iterations}] Current IP: {ip}")
 
-# build URL with autoplay & mute
-url = f"https://www.youtube.com/watch?v={video}&vq={vq}&autoplay=1&mute=1"
+    # build YouTube URL
+    url = f"https://www.youtube.com/watch?v={video}&vq={vq}&autoplay=1&mute=1"
+    log(f"[{i}/{iterations}] START watch @ quality={vq}")
+    driver.get(url)
+    time.sleep(random.uniform(2, 5))
 
-log(f"START watching {video} @ quality={vq}")
-driver.get(url)
-time.sleep(random.uniform(2, 5))
+    # try click play button
+    try:
+        btn = driver.find_element(By.CSS_SELECTOR, "button.ytp-large-play-button")
+        btn.click()
+        log("Clicked large play button")
+        time.sleep(random.uniform(1, 3))
+    except:
+        pass
 
-# click large play button if present
-try:
-    btn = driver.find_element(By.CSS_SELECTOR, "button.ytp-large-play-button")
-    btn.click()
-    log("Clicked large play button")
-    time.sleep(random.uniform(1, 3))
-except Exception:
-    pass
+    # interactions
+    random_scroll(driver, height)
+    random_pause_resume(driver)
 
-# pre-watch interactions
-random_scroll(driver, height)
-random_pause_resume(driver)
+    # watch loop
+    watch_time = random.uniform(30, 150)
+    end_time   = time.time() + watch_time
+    while time.time() < end_time:
+        if random.random() < 0.3:
+            random_scroll(driver, height)
+        if random.random() < 0.2:
+            random_pause_resume(driver)
+        time.sleep(random.uniform(5, 10))
 
-# watch loop
-watch_time = random.uniform(30, 150)
-start = time.time()
-while time.time() - start < watch_time:
-    if random.random() < 0.3:
-        random_scroll(driver, height)
-    if random.random() < 0.2:
-        random_pause_resume(driver)
-    time.sleep(random.uniform(5, 10))
+    # optional related click
+    if random_click_related(driver):
+        log("Clicked related video briefly")
+        time.sleep(random.uniform(10, 30))
 
-# optional related click
-if random_click_related(driver):
-    log("Clicked related video and watching briefly")
-    time.sleep(random.uniform(10, 30))
+    log(f"[{i}/{iterations}] END watch")
+    driver.quit()
 
-log(f"END watching {video}")
-driver.quit()
+    # short delay before next iteration
+    if i < iterations:
+        pause = random.uniform(5, 15)
+        log(f"Sleeping {pause:.1f}s before next rotation…")
+        time.sleep(pause)
