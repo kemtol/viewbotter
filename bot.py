@@ -42,7 +42,7 @@ def random_user_agent():
     return random.choice(uas)
 
 def get_current_ip(driver):
-    driver.get("https://httpbin.org/ip")
+    driver.get("http://httpbin.org/ip")
     time.sleep(random.uniform(2, 4))
     body = driver.find_element(By.TAG_NAME, "body").text
     try:
