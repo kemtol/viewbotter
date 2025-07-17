@@ -1,17 +1,19 @@
-# Dockerfile
 FROM python:3.11-slim
 
-# install Chromium & Chromedriver dari paket Debian
+# Install Chromium, Chromedriver & Selenium
 RUN apt-get update && \
-    apt-get install -y chromium chromium-driver && \
-    rm -rf /var/lib/apt/lists/* && \
-    pip install selenium
+    apt-get install -y --no-install-recommends \
+      chromium chromium-driver && \
+    pip install selenium && \
+    rm -rf /var/lib/apt/lists/*
 
-# Set env agar Selenium tahu di mana letak Chromium
+# Biar Selenium tahu lokasi browser & driver
 ENV CHROME_BIN=/usr/bin/chromium \
     CHROMEDRIVER_PATH=/usr/bin/chromedriver
 
 WORKDIR /app
-COPY bot.py .
 
-ENTRYPOINT ["python", "bot.py"]
+# Salin script bot
+COPY bot.py /app/bot.py
+
+ENTRYPOINT ["python3", "bot.py"]
