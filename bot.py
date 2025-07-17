@@ -12,42 +12,31 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 
-# ———————— Helpers ————————
-
 def log(msg: str):
     ts = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     print(f"[{ts}] {msg}", flush=True)
 
 def random_user_agent() -> str:
     uas = [
-        # Desktop
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-        "(KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36",
-        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 "
-        "(KHTML, like Gecko) Version/14.1.2 Safari/605.1.15",
-        # Mobile
-        "Mozilla/5.0 (Linux; Android 10; SM-G975F) AppleWebKit/537.36 "
-        "(KHTML, like Gecko) Chrome/115.0.5845.141 Mobile Safari/537.36",
-        "Mozilla/5.0 (iPhone; CPU iPhone OS 14_0 like Mac OS X) AppleWebKit/605.1.15 "
-        "(KHTML, like Gecko) Version/14.0 Mobile/15E148 Safari/604.1"
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36",
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.1.2 Safari/605.1.15",
+        "Mozilla/5.0 (Linux; Android 10; SM-G975F) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.5845.141 Mobile Safari/537.36",
+        "Mozilla/5.0 (iPhone; CPU iPhone OS 14_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0 Mobile/15E148 Safari/604.1"
     ]
     return random.choice(uas)
 
 def get_current_ip(driver: webdriver.Chrome) -> str:
-    driver.get("http://httpbin.org/ip")
+    # Panggil ipify via HTTP, tanpa redirect ke HTTPS
+    driver.get("http://api.ipify.org?format=json")
     time.sleep(random.uniform(2, 4))
     body = driver.find_element(By.TAG_NAME, "body").text
     try:
-        data = json.loads(body)
-        return data.get("origin", body)
+        return json.loads(body).get("ip", body)
     except json.JSONDecodeError:
         return body
 
 def get_video_title(driver: webdriver.Chrome) -> str:
-    try:
-        return driver.title
-    except:
-        return "Unknown Title"
+    return driver.title or "Unknown Title"
 
 def random_scroll(driver: webdriver.Chrome, height: int):
     for _ in range(random.randint(2, 5)):
@@ -87,14 +76,11 @@ def create_driver(proxy: str, width: int, height: int) -> webdriver.Chrome:
     opts.add_argument(f"--proxy-server={proxy}")
     opts.add_argument(f"user-agent={random_user_agent()}")
 
-    # Optional: jika Anda menyetorkan CHROME_BIN lewat Dockerfile/env
     if os.getenv("CHROME_BIN"):
         opts.binary_location = os.getenv("CHROME_BIN")
 
     service = Service(executable_path=os.getenv("CHROMEDRIVER_PATH"))
     return webdriver.Chrome(service=service, options=opts)
-
-# ———————— Main ————————
 
 def main():
     proxy      = os.getenv("PROXY_URL")
@@ -102,31 +88,25 @@ def main():
     iterations = int(os.getenv("ITERATIONS", os.getenv("REPLICAS", "1")))
 
     if not proxy or not video_id:
-        raise RuntimeError("PROXY_URL and VIDEO_ID must be set in environment")
+        raise RuntimeError("PROXY_URL and VIDEO_ID must be set")
 
     for i in range(1, iterations + 1):
-        # Pilih resolusi
         vq = random.choice(["medium", "large"])
         width, height = (640, 360) if vq == "medium" else (854, 480)
 
-        # Setup WebDriver
         try:
             driver = create_driver(proxy, width, height)
         except Exception as e:
             log(f"Failed to start WebDriver: {e}")
             continue
 
-        # Cek IP lewat proxy
         ip = get_current_ip(driver)
         log(f"START watching {video_id} @ quality={vq}")
 
-        # Load video page (HTTPS)
         url = f"https://www.youtube.com/watch?v={video_id}&autoplay=1&mute=1&vq={vq}"
         driver.get(url)
-        # Tunggu sampai title muncul
         WebDriverWait(driver, 10).until(EC.title_contains(video_id))
 
-        # Ambil judul & device
         title = get_video_title(driver)
         ua = driver.execute_script("return navigator.userAgent")
         device = "mobile phone" if any(x in ua for x in ("Android", "iPhone")) else "desktop"
@@ -134,13 +114,11 @@ def main():
         log(f"Watching {title} with {device} at {height}p resolution")
         log(f"From US using IP {ip}")
 
-        # Simulasi interaksi
         time.sleep(random.uniform(2, 5))
         random_scroll(driver, height)
         random_pause_resume(driver)
         random_click_related(driver)
 
-        # Durasi nonton
         watch_time = random.uniform(30, 150)
         end_time   = time.time() + watch_time
         while time.time() < end_time:
@@ -150,11 +128,9 @@ def main():
                 random_pause_resume(driver)
             time.sleep(random.uniform(5, 10))
 
-        # Akhiri sesi
         log(f"END watching {video_id}")
         driver.quit()
 
-        # Delay sebelum iterasi berikutnya
         if i < iterations:
             pause = random.uniform(5, 15)
             log(f"Sleeping {pause:.1f}s before next rotation…")
