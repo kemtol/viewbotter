@@ -1,19 +1,26 @@
 #!/usr/bin/env bash
-set -e
+set -e ITERATIONS=5 \
 
-# Sesuaikan credential & target video
 USERNAME="mkemalw"
 PASSWORD="LM3kKb2wAoyH7enb_country-UnitedStates"
-PROXY="proxy.packetstream.io:31111"
+PROXY="https://${USERNAME}:${PASSWORD}@proxy.packetstream.io:31111"
 VIDEO_ID="lWe_aJAYLfY"
 REPLICAS=25
+
+# Pastikan folder log ada
+mkdir -p ~/yt-bot/logs
+
+echo "🧹 Cleaning up old containers…"
+docker rm -f $(docker ps -aq --filter "name=yt-bot-") > /dev/null 2>&1 || true
 
 echo "🚀 Starting $REPLICAS bot containers…"
 for i in $(seq 1 $REPLICAS); do
   docker run -d \
     --name yt-bot-$i \
-    -e PROXY_URL="https://${USERNAME}:${PASSWORD}@${PROXY}" \
-    -e VIDEO_ID="${VIDEO_ID}" \
+    -e PROXY_URL="$PROXY" \
+    -e VIDEO_ID="$VIDEO_ID" \
+    -e CONTAINER_NAME="yt-bot-$i" \
+    -v ~/yt-bot/logs:/app/logs \
     yt-bot:latest
 done
 
