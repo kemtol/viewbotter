@@ -1,19 +1,24 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Muat variabel dari .env (jika ada)
+# Load env
 if [ -f .env ]; then
   export $(grep -v '^\s*#' .env | xargs)
 fi
 
-# Pastikan semua variabel wajib sudah di‑set
-: "${PS_HOST:?PS_HOST tidak ditemukan di .env}"
-: "${PS_PORT:?PS_PORT tidak ditemukan di .env}"
-: "${PS_USER:?PS_USER tidak ditemukan di .env}"
-: "${PS_PASS:?PS_PASS tidak ditemukan di .env}"
-: "${VIDEO_ID:?VIDEO_ID tidak ditemukan di .env}"
-: "${REPLICAS:?REPLICAS tidak ditemukan di .env}"
+# Sanity check
+: "${PS_HOST:?PS_HOST not set}"
+: "${PS_PORT:?PS_PORT not set}"
+: "${PS_USER:?PS_USER not set}"
+: "${PS_PASS:?PS_PASS not set}"
+: "${VIDEO_ID:?VIDEO_ID not set}"
+: "${REPLICAS:?REPLICAS not set}"
 
+# Clean up any leftover bots from prior runs
+echo "🧹 Cleaning up old yt-bot containers…"
+docker rm -f yt-bot-* 2> /dev/null || true
+
+# Launch new bots
 echo "🚀 Starting $REPLICAS bot containers…"
 for i in $(seq 1 "$REPLICAS"); do
   docker run --rm -d \
