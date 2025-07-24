@@ -19,12 +19,12 @@ def log(msg: str):
 
 def random_user_agent() -> str:
     uas = [
-        # Desktop UAs
+        # Desktop
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
         "(KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36",
         "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 "
         "(KHTML, like Gecko) Version/14.1.2 Safari/605.1.15",
-        # Mobile UAs
+        # Mobile
         "Mozilla/5.0 (Linux; Android 10; SM-G975F) AppleWebKit/537.36 "
         "(KHTML, like Gecko) Chrome/115.0.5845.141 Mobile Safari/537.36",
         "Mozilla/5.0 (iPhone; CPU iPhone OS 14_0 like Mac OS X) AppleWebKit/605.1.15 "
@@ -33,7 +33,6 @@ def random_user_agent() -> str:
     return random.choice(uas)
 
 def get_current_ip(driver: webdriver.Chrome) -> str:
-    # Gunakan api.ipify.org via HTTP, tanpa redirect ke HTTPS
     driver.get("http://api.ipify.org?format=json")
     time.sleep(random.uniform(2, 4))
     body = driver.find_element(By.TAG_NAME, "body").text
@@ -98,7 +97,7 @@ def main():
         raise RuntimeError("PROXY_URL and VIDEO_ID must be set")
 
     for i in range(1, iterations + 1):
-        # Pilih kualitas/resolusi
+        # Pilih kualitas (resolusi)
         vq = random.choice(["medium", "large"])
         width, height = (640, 360) if vq == "medium" else (854, 480)
 
@@ -113,28 +112,19 @@ def main():
         ip = get_current_ip(driver)
         log(f"START watching {video_id} @ quality={vq}")
 
-        # Buka halaman YouTube (HTTPS) dengan autoplay & mute
+        # Buka halaman YouTube
         url = f"https://www.youtube.com/watch?v={video_id}&autoplay=1&mute=1&vq={vq}"
         driver.get(url)
 
-        # Utama: tunggu elemen judul video muncul
+        # Tunggu sampai <video> muncul
         try:
             WebDriverWait(driver, 20).until(
-                EC.presence_of_element_located((
-                    By.CSS_SELECTOR,
-                    "h1.title yt-formatted-string"
-                ))
+                EC.presence_of_element_located((By.TAG_NAME, "video"))
             )
         except TimeoutException:
-            log("⚠️ Timeout waiting for video title element; will fallback to page title")
+            log("⚠️ Timeout waiting for <video> element; melanjutkan saja")
 
-        # Fallback: tunggu page title mengandung video_id
-        try:
-            WebDriverWait(driver, 10).until(EC.title_contains(video_id))
-        except TimeoutException:
-            log("⚠️ Fallback: page title still missing video_id")
-
-        # Ambil judul final dan device
+        # Ambil judul & device
         title = get_video_title(driver)
         ua = driver.execute_script("return navigator.userAgent")
         device = "mobile phone" if any(x in ua for x in ("Android", "iPhone")) else "desktop"
@@ -148,10 +138,10 @@ def main():
         random_pause_resume(driver)
         random_click_related(driver)
 
-        # Durasi tayang acak
+        # Durasi nonton
         watch_time = random.uniform(30, 150)
-        end_time   = time.time() + watch_time
-        while time.time() < end_time:
+        end = time.time() + watch_time
+        while time.time() < end:
             if random.random() < 0.3:
                 random_scroll(driver, height)
             if random.random() < 0.2:
