@@ -11,6 +11,7 @@ from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+from selenium.common.exceptions import TimeoutException
 
 def log(msg: str):
     ts = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -18,15 +19,21 @@ def log(msg: str):
 
 def random_user_agent() -> str:
     uas = [
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36",
-        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.1.2 Safari/605.1.15",
-        "Mozilla/5.0 (Linux; Android 10; SM-G975F) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.5845.141 Mobile Safari/537.36",
-        "Mozilla/5.0 (iPhone; CPU iPhone OS 14_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0 Mobile/15E148 Safari/604.1"
+        # Desktop UAs
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36",
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 "
+        "(KHTML, like Gecko) Version/14.1.2 Safari/605.1.15",
+        # Mobile UAs
+        "Mozilla/5.0 (Linux; Android 10; SM-G975F) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/115.0.5845.141 Mobile Safari/537.36",
+        "Mozilla/5.0 (iPhone; CPU iPhone OS 14_0 like Mac OS X) AppleWebKit/605.1.15 "
+        "(KHTML, like Gecko) Version/14.0 Mobile/15E148 Safari/604.1"
     ]
     return random.choice(uas)
 
 def get_current_ip(driver: webdriver.Chrome) -> str:
-    # Panggil ipify via HTTP, tanpa redirect ke HTTPS
+    # Gunakan api.ipify.org via HTTP, tanpa redirect ke HTTPS
     driver.get("http://api.ipify.org?format=json")
     time.sleep(random.uniform(2, 4))
     body = driver.find_element(By.TAG_NAME, "body").text
@@ -91,22 +98,43 @@ def main():
         raise RuntimeError("PROXY_URL and VIDEO_ID must be set")
 
     for i in range(1, iterations + 1):
+        # Pilih kualitas/resolusi
         vq = random.choice(["medium", "large"])
         width, height = (640, 360) if vq == "medium" else (854, 480)
 
+        # Inisialisasi WebDriver
         try:
             driver = create_driver(proxy, width, height)
         except Exception as e:
             log(f"Failed to start WebDriver: {e}")
             continue
 
+        # Cek IP via proxy
         ip = get_current_ip(driver)
         log(f"START watching {video_id} @ quality={vq}")
 
+        # Buka halaman YouTube (HTTPS) dengan autoplay & mute
         url = f"https://www.youtube.com/watch?v={video_id}&autoplay=1&mute=1&vq={vq}"
         driver.get(url)
-        WebDriverWait(driver, 10).until(EC.title_contains(video_id))
 
+        # Utama: tunggu elemen judul video muncul
+        try:
+            WebDriverWait(driver, 20).until(
+                EC.presence_of_element_located((
+                    By.CSS_SELECTOR,
+                    "h1.title yt-formatted-string"
+                ))
+            )
+        except TimeoutException:
+            log("⚠️ Timeout waiting for video title element; will fallback to page title")
+
+        # Fallback: tunggu page title mengandung video_id
+        try:
+            WebDriverWait(driver, 10).until(EC.title_contains(video_id))
+        except TimeoutException:
+            log("⚠️ Fallback: page title still missing video_id")
+
+        # Ambil judul final dan device
         title = get_video_title(driver)
         ua = driver.execute_script("return navigator.userAgent")
         device = "mobile phone" if any(x in ua for x in ("Android", "iPhone")) else "desktop"
@@ -114,11 +142,13 @@ def main():
         log(f"Watching {title} with {device} at {height}p resolution")
         log(f"From US using IP {ip}")
 
+        # Simulasi interaksi
         time.sleep(random.uniform(2, 5))
         random_scroll(driver, height)
         random_pause_resume(driver)
         random_click_related(driver)
 
+        # Durasi tayang acak
         watch_time = random.uniform(30, 150)
         end_time   = time.time() + watch_time
         while time.time() < end_time:
@@ -131,6 +161,7 @@ def main():
         log(f"END watching {video_id}")
         driver.quit()
 
+        # Delay sebelum sesi berikutnya
         if i < iterations:
             pause = random.uniform(5, 15)
             log(f"Sleeping {pause:.1f}s before next rotation…")
