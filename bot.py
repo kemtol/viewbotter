@@ -1,145 +1,116 @@
-import os
-import time
-import json
-import random
-import datetime
+#!/usr/bin/env python3
+import os, time, json, random, datetime
+from urllib.parse import urlparse
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.common.exceptions import TimeoutException
 
 def log(msg):
     ts = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     print(f"[{ts}] {msg}", flush=True)
 
-def get_video_title(driver):
-    # Setelah halaman load, ambil title
-    try:
-        return driver.title
-    except:
-        return "Unknown Title"
-
-def get_current_ip(driver):
-    driver.get("https://httpbin.org/ip")
-    time.sleep(random.uniform(2, 4))
-    body = driver.find_element(By.TAG_NAME, "body").text
-    try:
-        data = json.loads(body)
-        return data.get("origin", body)
-    except:
-        return body
-
-# ————— Helper functions ——————
 def random_user_agent():
-    uas = [
-        # Desktop
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64)…",
-        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)…",
-        # Mobile
-        "Mozilla/5.0 (Linux; Android 10; SM-G975F)…",
-        "Mozilla/5.0 (iPhone; CPU iPhone OS 14_0 like Mac OS X)…"
-    ]
-    return random.choice(uas)
+    # Hanya UA mobile
+    return random.choice([
+        "Mozilla/5.0 (Linux; Android 10; SM-G975F) AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/115.0.5845.141 Mobile Safari/537.36",
+        "Mozilla/5.0 (iPhone; CPU iPhone OS 14_0 like Mac OS X) AppleWebKit/605.1.15 "
+        "(KHTML, like Gecko) Version/14.0 Mobile/15E148 Safari/604.1"
+    ])
 
 def get_current_ip(driver):
-    driver.get("http://httpbin.org/ip")
-    time.sleep(random.uniform(2, 4))
+    driver.get("http://api.ipify.org?format=json")
+    time.sleep(random.uniform(1, 2))
     body = driver.find_element(By.TAG_NAME, "body").text
     try:
-        data = json.loads(body)
-        return data.get("origin", body)
+        return json.loads(body)["ip"]
     except:
         return body
 
-def random_scroll(driver, height):
-    for _ in range(random.randint(2, 5)):
-        px = random.randint(int(height/3), height)
-        driver.execute_script(f"window.scrollBy(0, {px});")
-        time.sleep(random.uniform(2, 6))
+def create_driver(proxy_url):
+    opts = Options()
+    opts.add_argument("--headless")
+    opts.add_argument("--no-sandbox")
+    opts.add_argument("--disable-gpu")
+    opts.add_argument("--ignore-certificate-errors")
+    opts.add_argument("--window-size=360,640")  # mobile size
+    opts.add_argument(f"--proxy-server={proxy_url}")
+    opts.add_argument(f"user-agent={random_user_agent()}")
 
-def random_pause_resume(driver):
-    videos = driver.find_elements(By.TAG_NAME, "video")
-    if videos and random.random() < 0.5:
-        try:
-            driver.execute_script("arguments[0].pause();", videos[0])
-            time.sleep(random.uniform(1, 3))
-            driver.execute_script("arguments[0].play();", videos[0])
-        except Exception as e:
-            log(f"pause/play error: {e}")
+    service = Service(os.getenv("CHROMEDRIVER_PATH"))
+    driver = webdriver.Chrome(service=service, options=opts)
 
-def random_click_related(driver):
-    if random.random() < 0.3:
-        elems = driver.find_elements(By.CSS_SELECTOR, "ytd-compact-video-renderer a#thumbnail")
-        if elems:
-            choice = random.choice(elems[:5])
-            driver.execute_script("arguments[0].scrollIntoView();", choice)
-            time.sleep(random.uniform(1,2))
-            choice.click()
-            time.sleep(random.uniform(3, 7))
-            return True
-    return False
-
-# ————— Main ——————
-proxy      = os.getenv("PROXY_URL")
-video      = os.getenv("VIDEO_ID")
-iterations = int(os.getenv("ITERATIONS", "1"))
-
-proxy      = os.getenv("PROXY_URL")
-video      = os.getenv("VIDEO_ID")
-iterations = int(os.getenv("ITERATIONS", "1"))
-
-for i in range(1, iterations+1):
-    # — setup resolution
-    vq = random.choice(["medium","large"])
-    width, height = (640,360) if vq=="medium" else (854,480)
-    # — setup Chrome
-    options = Options()
-    options.binary_location = os.environ.get("CHROME_BIN")
-    options.add_argument("--headless")
-    options.add_argument(f"--window-size={width},{height}")
-    options.add_argument(f"--proxy-server={proxy}")
-    options.add_argument(f"user-agent={random_user_agent()}")
-    options.add_argument("--no-sandbox")
-    options.add_argument("--disable-gpu")
-    options.add_argument("--ignore-certificate-errors")
-    service = Service(executable_path=os.environ.get("CHROMEDRIVER_PATH"))
-    driver  = webdriver.Chrome(service=service, options=options)
-
-    # — UPDATED LOG FORMAT —  
-    ip = get_current_ip(driver)
-    log(f"START watching {video} @ quality={vq}")
-    title = get_video_title(driver) or video
-    # asumsi mobile phone jika UA mengandung Android atau iPhone
-    device = "mobile phone" if "Android" in driver.execute_script("return navigator.userAgent") or "iPhone" in driver.execute_script("return navigator.userAgent") else "desktop"
-    log(f"Watching {title} with {device} at {height}p resolution")
-    log(f"From US using IP {ip}.")
-
-    # — play video
-    url = f"https://www.youtube.com/watch?v={video}&vq={vq}&autoplay=1&mute=1"
-    driver.get(url)
-    time.sleep(random.uniform(2,5))
+    # Throttle jaringan (mobile-like)
     try:
-        btn = driver.find_element(By.CSS_SELECTOR, "button.ytp-large-play-button")
-        btn.click()
-        time.sleep(random.uniform(1,3))
-    except:
-        pass
+        driver.execute_cdp_cmd("Network.enable", {})
+        driver.execute_cdp_cmd("Network.emulateNetworkConditions", {
+            "offline": False,
+            "latency": 200,                   # ms
+            "downloadThroughput": 200*1024/8, # ~200kb/s
+            "uploadThroughput": 100*1024/8    # ~100kb/s
+        })
+    except Exception as e:
+        log(f"[WARN] Network emulation failed: {e}")
 
-    # — interactions & watch loop
-    random_scroll(driver, height)
-    random_pause_resume(driver)
-    watch_time = random.uniform(30,150)
-    end_time   = time.time() + watch_time
-    while time.time() < end_time:
-        if random.random()<0.3: random_scroll(driver, height)
-        if random.random()<0.2: random_pause_resume(driver)
-        time.sleep(random.uniform(5,10))
+    return driver
 
-    # — akhir sesi
-    log(f"END watching {video}")
-    driver.quit()
+def main():
+    raw_proxy = os.getenv("PROXY_URL")  # e.g. http://user:pass@host:port
+    video_id  = os.getenv("VIDEO_ID")
+    iters     = int(os.getenv("ITERATIONS", os.getenv("REPLICAS", "1")))
 
-    if i < iterations:
-        pause = random.uniform(5,15)
-        log(f"Sleeping {pause:.1f}s before next rotation…")
-        time.sleep(pause)
+    if not raw_proxy or not video_id:
+        raise RuntimeError("PROXY_URL and VIDEO_ID must be set")
+
+    for i in range(1, iters+1):
+        # acak delay awal agar IP tidak sama
+        delay0 = random.uniform(0, 20)
+        log(f"Initial delay before session {i}: {delay0:.1f}s")
+        time.sleep(delay0)
+
+        # tambahkan session suffix untuk rotasi IP
+        session_id = random.randint(100000, 999999)
+        p = urlparse(raw_proxy)
+        user = p.username
+        host_str = raw_proxy.replace(user, f"{user}-sess{session_id}")
+        driver = None
+        try:
+            driver = create_driver(host_str)
+        except Exception as e:
+            log(f"[ERROR] WebDriver init failed (sess{session_id}): {e}")
+            continue
+
+        ip = get_current_ip(driver)
+        log(f"START watching {video_id} (sess{session_id}), IP={ip}")
+
+        # load video
+        url = f"https://www.youtube.com/watch?v={video_id}&autoplay=1&mute=1"
+        driver.get(url)
+        try:
+            WebDriverWait(driver, 15).until(
+                EC.presence_of_element_located((By.TAG_NAME, "video"))
+            )
+        except TimeoutException:
+            log("[WARN] <video> load timeout")
+
+        log("Watching…")
+        # durasi nonton
+        watch_time = random.uniform(30, 150)
+        end_ts = time.time() + watch_time
+        while time.time() < end_ts:
+            time.sleep(5)  # atau tambahkan scroll/pause simulasi seperti sebelum
+
+        log(f"END watching {video_id} (sess{session_id})")
+        driver.quit()
+
+        if i < iters:
+            pause = random.uniform(5, 15)
+            log(f"Sleeping {pause:.1f}s before next iter")
+            time.sleep(pause)
+
+if __name__ == "__main__":
+    main()
