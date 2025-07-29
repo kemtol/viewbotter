@@ -14,13 +14,13 @@ fi
 : "${VIDEO_ID:?VIDEO_ID not set in .env}"
 : "${REPLICAS:?REPLICAS not set in .env}"
 
-# 3. Bentuk PROXY_URL yang dipakai container
+# 3. Bentuk PROXY_URL
 PROXY_URL="http://${PS_USER}:${PS_PASS}@${PS_HOST}:${PS_PORT}"
 
-# 4. Siapkan folder log (relatif ke project)
+# 4. Siapkan folder log
 mkdir -p logs
 
-# 5. Bersihkan semua container yt-bot-* yang tersisa
+# 5. Bersihkan container lama
 echo "🧹 Cleaning up old yt-bot containers…"
 docker rm -f $(docker ps -aq --filter "name=yt-bot-") > /dev/null 2>&1 || true
 
