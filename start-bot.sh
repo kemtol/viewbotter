@@ -5,7 +5,7 @@ USERNAME="mkemalw"
 PASSWORD="LM3kKb2wAoyH7enb_country-UnitedStates"
 PROXY="https://${USERNAME}:${PASSWORD}@proxy.packetstream.io:31111"
 VIDEO_ID="lWe_aJAYLfY"
-REPLICAS=25
+REPLICAS=3
 
 # Pastikan folder log ada
 mkdir -p ~/yt-bot/logs
