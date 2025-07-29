@@ -77,7 +77,7 @@ def maybe_screenshot(driver, log_dir, prefix):
             log(f"[WARN] Screenshot failed: {e}")
 
 # Main
- def main():
+def main():
     raw_proxy = os.getenv("PROXY_URL")
     video_id  = os.getenv("VIDEO_ID")
     iters     = int(os.getenv("ITERATIONS", os.getenv("REPLICAS", "1")))
