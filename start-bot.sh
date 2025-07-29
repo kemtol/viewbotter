@@ -1,27 +1,39 @@
 #!/usr/bin/env bash
-set -e ITERATIONS=5 \
+set -euo pipefail
 
-USERNAME="mkemalw"
-PASSWORD="LM3kKb2wAoyH7enb_country-UnitedStates"
-PROXY="https://${USERNAME}:${PASSWORD}@proxy.packetstream.io:31111"
-VIDEO_ID="lWe_aJAYLfY"
-REPLICAS=3
+# 1. Muat variabel dari .env
+if [ -f .env ]; then
+  export $(grep -v '^\s*#' .env | xargs)
+fi
 
-# Pastikan folder log ada
-mkdir -p ~/yt-bot/logs
+# 2. Validasi mandatory env vars
+: "${PS_HOST:?PS_HOST not set in .env}"
+: "${PS_PORT:?PS_PORT not set in .env}"
+: "${PS_USER:?PS_USER not set in .env}"
+: "${PS_PASS:?PS_PASS not set in .env}"
+: "${VIDEO_ID:?VIDEO_ID not set in .env}"
+: "${REPLICAS:?REPLICAS not set in .env}"
 
-echo "🧹 Cleaning up old containers…"
+# 3. Bentuk PROXY_URL yang dipakai container
+PROXY_URL="http://${PS_USER}:${PS_PASS}@${PS_HOST}:${PS_PORT}"
+
+# 4. Siapkan folder log (relatif ke project)
+mkdir -p logs
+
+# 5. Bersihkan semua container yt-bot-* yang tersisa
+echo "🧹 Cleaning up old yt-bot containers…"
 docker rm -f $(docker ps -aq --filter "name=yt-bot-") > /dev/null 2>&1 || true
 
+# 6. Spin up container baru
 echo "🚀 Starting $REPLICAS bot containers…"
-for i in $(seq 1 $REPLICAS); do
+for i in $(seq 1 "$REPLICAS"); do
   docker run -d \
     --name yt-bot-$i \
-    -e PROXY_URL="$PROXY" \
+    -e PROXY_URL="$PROXY_URL" \
     -e VIDEO_ID="$VIDEO_ID" \
-    -e CONTAINER_NAME="yt-bot-$i" \
-    -v ~/yt-bot/logs:/app/logs \
+    -v "$(pwd)/logs":/app/logs \
     yt-bot:latest
+  sleep 0.5
 done
 
 echo "✅ $REPLICAS bots are up!"
